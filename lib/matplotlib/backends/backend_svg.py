@@ -106,7 +106,7 @@ def _short_float_fmt(x):
     return f'{x:f}'.rstrip('0').rstrip('.')
 
 
-class XMLWriter:
+class _XMLWriter:
     """
     Parameters
     ----------
@@ -135,7 +135,7 @@ class XMLWriter:
             self.__write(_escape_cdata(data))
             self.__data = []
 
-    def start(self, tag, attrib={}, **extra):
+    def start(self, tag, attrib=None, **extra):
         """
         Open a new element.  Attributes can be given as keyword
         arguments, or as a string/string dictionary. The method returns
@@ -154,6 +154,8 @@ class XMLWriter:
         -------
         An element identifier.
         """
+        if attrib is None:
+            attrib = {}
         self.__flush()
         tag = _escape_cdata(tag)
         self.__data = []
@@ -234,12 +236,14 @@ class XMLWriter:
         while len(self.__tags) > id:
             self.end()
 
-    def element(self, tag, text=None, attrib={}, **extra):
+    def element(self, tag, text=None, attrib=None, **extra):
         """
         Add an entire element.  This is the same as calling :meth:`start`,
         :meth:`data`, and :meth:`end` in sequence. The *text* argument can be
         omitted.
         """
+        if attrib is None:
+            attrib = {}
         self.start(tag, attrib, **extra)
         if text:
             self.data(text)
@@ -248,6 +252,15 @@ class XMLWriter:
     def flush(self):
         """Flush the output stream."""
         pass  # replaced by the constructor
+
+
+@mpl._api.deprecated("3.11")
+class XMLWriter(_XMLWriter):
+    """
+    An XML writer class.
+
+    :meta private:
+    """
 
 
 def _generate_transform(transform_list):
@@ -293,7 +306,7 @@ class RendererSVG(RendererBase):
                  *, metadata=None):
         self.width = width
         self.height = height
-        self.writer = XMLWriter(svgwriter)
+        self.writer = _XMLWriter(svgwriter)
         self.image_dpi = image_dpi  # actual dpi at which we rasterize stuff
 
         if basename is None:
@@ -947,7 +960,7 @@ class RendererSVG(RendererBase):
                 id='colorMat')
             writer.element(
                 'feColorMatrix',
-                attrib={'type': 'matrix'},
+                type='matrix',
                 values='1 0 0 0 0 \n0 1 0 0 0 \n0 0 1 0 0 \n1 1 1 1 0 \n0 0 0 0 1 ')
             writer.end('filter')
 
@@ -1003,7 +1016,6 @@ class RendererSVG(RendererBase):
         if transform is None:
             w = 72.0 * w / self.image_dpi
             h = 72.0 * h / self.image_dpi
-
             self.writer.element(
                 'image',
                 transform=_generate_transform([
@@ -1011,29 +1023,23 @@ class RendererSVG(RendererBase):
                 x=_short_float_fmt(x),
                 y=_short_float_fmt(-(self.height - y - h)),
                 width=_short_float_fmt(w), height=_short_float_fmt(h),
-                attrib=attrib)
+                attrib=attrib,
+            )
         else:
             alpha = gc.get_alpha()
             if alpha != 1.0:
                 attrib['opacity'] = _short_float_fmt(alpha)
-
             flipped = (
-                Affine2D().scale(1.0 / w, 1.0 / h) +
-                transform +
-                Affine2D()
-                .translate(x, y)
-                .scale(1.0, -1.0)
-                .translate(0.0, self.height))
-
-            attrib['transform'] = _generate_transform(
-                [('matrix', flipped.frozen())])
-            attrib['style'] = (
-                'image-rendering:crisp-edges;'
-                'image-rendering:pixelated')
+                Affine2D().scale(1 / w, 1 / h)
+                + transform
+                + Affine2D().translate(x, y).scale(1, -1).translate(0, self.height))
             self.writer.element(
                 'image',
                 width=_short_float_fmt(w), height=_short_float_fmt(h),
-                attrib=attrib)
+                attrib=attrib,
+                transform=_generate_transform([('matrix', flipped.frozen())]),
+                style='image-rendering:crisp-edges;image-rendering:pixelated',
+            )
 
         if url is not None:
             self.writer.end('a')
@@ -1081,14 +1087,15 @@ class RendererSVG(RendererBase):
         if alpha != 1:
             style['opacity'] = _short_float_fmt(alpha)
         font_scale = fontsize / text2path.FONT_SCALE
-        attrib = {
-            'style': _generate_css(style),
-            'transform': _generate_transform([
+        writer.start(
+            'g',
+            style=_generate_css(style),
+            transform=_generate_transform([
                 ('translate', (x, y)),
                 ('rotate', (-angle,)),
-                ('scale', (font_scale, -font_scale))]),
-        }
-        writer.start('g', attrib=attrib)
+                ('scale', (font_scale, -font_scale)),
+            ]),
+        )
 
         if not ismath:
             font = text2path._get_font(prop)
@@ -1159,7 +1166,8 @@ class RendererSVG(RendererBase):
                 font_style['font-style'] = prop.get_style()
             if prop.get_variant() != 'normal':
                 font_style['font-variant'] = prop.get_variant()
-            weight = fm.weight_dict[prop.get_weight()]
+            weight = prop.get_weight()
+            weight = fm.weight_dict.get(weight, weight)  # convert to int
             if weight != 400:
                 font_style['font-weight'] = f'{weight}'
 

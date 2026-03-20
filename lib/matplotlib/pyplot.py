@@ -398,9 +398,6 @@ def switch_backend(newbackend: str) -> None:
     another interactive backend has started.  Switching to and from
     non-interactive backends is always possible.
 
-    If the new backend is different than the current backend then all open
-    Figures will be closed via ``plt.close('all')``.
-
     Parameters
     ----------
     newbackend : str
@@ -1181,6 +1178,25 @@ def fignum_exists(num: int | str) -> bool:
     )
 
 
+def _raise_if_figure_exists(num, func_name, clear=False):
+    """
+    Raise a ValueError if the figure *num* already exists.
+    """
+    if num is not None and not clear:
+        if isinstance(num, FigureBase):
+            raise ValueError(
+                f"num {num!r} cannot be a FigureBase instance. "
+                f"plt.{func_name}() is for creating new figures. "
+                f"To add to an existing figure, use fig.{func_name}() "
+                "instead.")
+
+        if fignum_exists(num):
+            raise ValueError(
+                f"Figure {num!r} already exists. Use plt.figure({num!r}) "
+                f"to get it or plt.close({num!r}) to close it. "
+                f"Alternatively, pass 'clear=True' to {func_name}().")
+
+
 def get_fignums() -> list[int]:
     """Return a list of existing figure numbers."""
     return sorted(_pylab_helpers.Gcf.figs)
@@ -1665,7 +1681,7 @@ def subplots(
     height_ratios: Sequence[float] | None = ...,
     subplot_kw: dict[str, Any] | None = ...,
     gridspec_kw: dict[str, Any] | None = ...,
-    **fig_kw
+    **fig_kw: Any
 ) -> tuple[Figure, Axes]:
     ...
 
@@ -1682,7 +1698,7 @@ def subplots(
     height_ratios: Sequence[float] | None = ...,
     subplot_kw: dict[str, Any] | None = ...,
     gridspec_kw: dict[str, Any] | None = ...,
-    **fig_kw
+    **fig_kw: Any
 ) -> tuple[Figure, np.ndarray]:  # TODO numpy/numpy#24738
     ...
 
@@ -1699,7 +1715,7 @@ def subplots(
     height_ratios: Sequence[float] | None = ...,
     subplot_kw: dict[str, Any] | None = ...,
     gridspec_kw: dict[str, Any] | None = ...,
-    **fig_kw
+    **fig_kw: Any
 ) -> tuple[Figure, Any]:
     ...
 
@@ -1713,7 +1729,7 @@ def subplots(
     height_ratios: Sequence[float] | None = None,
     subplot_kw: dict[str, Any] | None = None,
     gridspec_kw: dict[str, Any] | None = None,
-    **fig_kw
+    **fig_kw: Any
 ) -> tuple[Figure, Any]:
     """
     Create a figure and a set of subplots.
@@ -1842,7 +1858,7 @@ def subplots(
         axs[0, 0].plot(x, y)
         axs[1, 1].scatter(x, y)
 
-        # Share a X axis with each column of subplots
+        # Share an X axis with each column of subplots
         plt.subplots(2, 2, sharex='col')
 
         # Share a Y axis with each row of subplots
@@ -1859,6 +1875,9 @@ def subplots(
         fig, ax = plt.subplots(num=10, clear=True)
 
     """
+    num = fig_kw.get('num')
+    _raise_if_figure_exists(fig_kw.get('num'), "subplots", fig_kw.get('clear'))
+
     fig = figure(**fig_kw)
     axs = fig.subplots(nrows=nrows, ncols=ncols, sharex=sharex, sharey=sharey,
                        squeeze=squeeze, subplot_kw=subplot_kw,
@@ -2032,6 +2051,9 @@ def subplot_mosaic(
        total layout.
 
     """
+    num = fig_kw.get('num')
+    _raise_if_figure_exists(fig_kw.get('num'), "subplot_mosaic", fig_kw.get('clear'))
+
     fig = figure(**fig_kw)
     ax_dict = fig.subplot_mosaic(  # type: ignore[misc]
         mosaic,  # type: ignore[arg-type]

@@ -140,17 +140,20 @@ class Tick(martist.Artist):
             f"grid.{major_minor}.linewidth",
             "grid.linewidth",
         )
-        if grid_alpha is None and not mcolors._has_alpha_channel(grid_color):
-            # alpha precedence: kwarg > color alpha > rcParams['grid.alpha']
-            # Note: only resolve to rcParams if the color does not have alpha
-            # otherwise `grid(color=(1, 1, 1, 0.5))` would work like
-            #   grid(color=(1, 1, 1, 0.5), alpha=rcParams['grid.alpha'])
-            # so the that the rcParams default would override color alpha.
-            grid_alpha = mpl._val_or_rc(
-                # grid_alpha is None so we can use the first key
-                mpl.rcParams[f"grid.{major_minor}.alpha"],
-                "grid.alpha",
-            )
+        if grid_alpha is None:
+            if mcolors._has_alpha_channel(grid_color):
+                # Extract alpha from the color
+                # alpha precedence: kwarg > color alpha > rcParams['grid.alpha']
+                rgba = mcolors.to_rgba(grid_color)
+                grid_color = rgba[:3]  # RGB only
+                grid_alpha = rgba[3]    # Alpha from color
+            else:
+                # No alpha in color, use rcParams
+                grid_alpha = mpl._val_or_rc(
+                    # grid_alpha is None so we can use the first key
+                    mpl.rcParams[f"grid.{major_minor}.alpha"],
+                    "grid.alpha",
+                )
 
         grid_kw = {k[5:]: v for k, v in kwargs.items() if k != "rotation_mode"}
 
@@ -348,6 +351,15 @@ class Tick(martist.Artist):
 
         grid_kw = {k[5:]: v for k, v in kwargs.items()
                    if k in _gridline_param_names}
+        # If grid_color has an alpha channel and grid_alpha is not explicitly
+        # set, extract the alpha from the color.
+        if 'color' in grid_kw and 'alpha' not in grid_kw:
+            grid_color = grid_kw['color']
+            if mcolors._has_alpha_channel(grid_color):
+                # Convert to rgba to extract alpha
+                rgba = mcolors.to_rgba(grid_color)
+                grid_kw['color'] = rgba[:3]  # RGB only
+                grid_kw['alpha'] = rgba[3]    # Alpha channel
         self.gridline.set(**grid_kw)
 
     def update_position(self, loc):
@@ -703,7 +715,7 @@ class Axis(martist.Artist):
         self.minor._formatter_is_default = value
 
     def _get_shared_axes(self):
-        """Return Grouper of shared Axes for current axis."""
+        """Return a list of shared Axes for current axis."""
         return self.axes._shared_axes[
             self._get_axis_name()].get_siblings(self.axes)
 
@@ -1278,26 +1290,53 @@ class Axis(martist.Artist):
             return
         a.set_figure(self.get_figure(root=False))
 
+    @staticmethod
+    def _tick_group_visible(kw):
+        """
+        Check if any of the tick group components are visible.
+        Takes in self._major_tick_kw or self._minor_tick_kw.
+        """
+        return (kw.get('tick1On') is not False or
+                kw.get('tick2On') is not False or
+                kw.get('label1On') is not False or
+                kw.get('label2On') is not False or
+                kw.get('gridOn') is not False)
+
     def _update_ticks(self):
         """
         Update ticks (position and labels) using the current data interval of
         the axes.  Return the list of ticks that will be drawn.
         """
-        major_locs = self.get_majorticklocs()
-        major_labels = self.major.formatter.format_ticks(major_locs)
-        major_ticks = self.get_major_ticks(len(major_locs))
-        for tick, loc, label in zip(major_ticks, major_locs, major_labels):
-            tick.update_position(loc)
-            tick.label1.set_text(label)
-            tick.label2.set_text(label)
-        minor_locs = self.get_minorticklocs()
-        minor_labels = self.minor.formatter.format_ticks(minor_locs)
-        minor_ticks = self.get_minor_ticks(len(minor_locs))
-        for tick, loc, label in zip(minor_ticks, minor_locs, minor_labels):
-            tick.update_position(loc)
-            tick.label1.set_text(label)
-            tick.label2.set_text(label)
+        # Check if major ticks should be computed.
+        # Skip if using NullLocator or if all visible components are off.
+        if (self._tick_group_visible(self._major_tick_kw)
+                and not isinstance(self.get_major_locator(), NullLocator)):
+            major_locs = self.get_majorticklocs()
+            major_labels = self.major.formatter.format_ticks(major_locs)
+            major_ticks = self.get_major_ticks(len(major_locs))
+            for tick, loc, label in zip(major_ticks, major_locs, major_labels):
+                tick.update_position(loc)
+                tick.label1.set_text(label)
+                tick.label2.set_text(label)
+        else:
+            major_ticks = []
+
+        # Check if minor ticks should be computed.
+        if (self._tick_group_visible(self._minor_tick_kw)
+                and not isinstance(self.get_minor_locator(), NullLocator)):
+            minor_locs = self.get_minorticklocs()
+            minor_labels = self.minor.formatter.format_ticks(minor_locs)
+            minor_ticks = self.get_minor_ticks(len(minor_locs))
+            for tick, loc, label in zip(minor_ticks, minor_locs, minor_labels):
+                tick.update_position(loc)
+                tick.label1.set_text(label)
+                tick.label2.set_text(label)
+        else:
+            minor_ticks = []
+
         ticks = [*major_ticks, *minor_ticks]
+        if not ticks:
+            return []
 
         view_low, view_high = self.get_view_interval()
         if view_low > view_high:
@@ -2163,9 +2202,16 @@ class Axis(martist.Artist):
         ticks = self.convert_units(ticks)
         locator = mticker.FixedLocator(ticks)  # validate ticks early.
         if len(ticks):
+            old_vmin, old_vmax = self.get_view_interval()
             for axis in self._get_shared_axis():
                 # set_view_interval maintains any preexisting inversion.
                 axis.set_view_interval(min(ticks), max(ticks))
+            new_vmin, new_vmax = self.get_view_interval()
+            if old_vmin != new_vmin or old_vmax != new_vmax:
+                self.axes.callbacks.process(
+                    f"{self._get_axis_name()}lim_changed",
+                    self.axes,
+                )
         self.axes.stale = True
         if minor:
             self.set_minor_locator(locator)
@@ -2439,7 +2485,7 @@ class XAxis(Axis):
         ----------
         position : {'top', 'bottom'}
         """
-        self.label.set_verticalalignment(_api.check_getitem({
+        self.label.set_verticalalignment(_api.getitem_checked({
             'top': 'baseline', 'bottom': 'top',
         }, position=position))
         self.label_position = position
@@ -2666,7 +2712,7 @@ class YAxis(Axis):
         position : {'left', 'right'}
         """
         self.label.set_rotation_mode('anchor')
-        self.label.set_verticalalignment(_api.check_getitem({
+        self.label.set_verticalalignment(_api.getitem_checked({
             'left': 'bottom', 'right': 'top',
         }, position=position))
         self.label_position = position
@@ -2721,7 +2767,7 @@ class YAxis(Axis):
         position : {'left', 'right'}
         """
         x, y = self.offsetText.get_position()
-        x = _api.check_getitem({'left': 0, 'right': 1}, position=position)
+        x = _api.getitem_checked({'left': 0, 'right': 1}, position=position)
 
         self.offsetText.set_ha(position)
         self.offsetText.set_position((x, y))

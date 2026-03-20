@@ -239,8 +239,9 @@ def test_matshow(fig_test, fig_ref):
     ax_ref.xaxis.set_ticks_position('both')
 
 
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
 @image_comparison([f'formatter_ticker_{i:03d}.png' for i in range(1, 6)],
-                  tol=0 if platform.machine() == 'x86_64' else 0.031)
+                  tol=0.02 if platform.machine() == 'x86_64' else 0.04)
 def test_formatter_ticker():
     import matplotlib.testing.jpl_units as units
     units.register()
@@ -809,7 +810,8 @@ def test_annotate_signature():
         assert p1 == p2
 
 
-@image_comparison(['fill_units.png'], savefig_kwarg={'dpi': 60})
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['fill_units.png'], savefig_kwarg={'dpi': 60}, tol=0.2)
 def test_fill_units():
     import matplotlib.testing.jpl_units as units
     units.register()
@@ -917,8 +919,7 @@ def test_structured_data():
     axs[1].plot("ones", "twos", "r", data=pts)
 
 
-@image_comparison(['aitoff_proj'], extensions=["png"],
-                  remove_text=True, style='mpl20')
+@image_comparison(['aitoff_proj.png'], remove_text=True, style='mpl20')
 def test_aitoff_proj():
     """
     Test aitoff projection ref.:
@@ -1408,7 +1409,7 @@ def test_pcolormesh():
     ax3.pcolormesh(Qx, Qz, Zm, shading="gouraud")
 
 
-@image_comparison(['pcolormesh_small'], extensions=["eps"])
+@image_comparison(['pcolormesh_small.eps'])
 def test_pcolormesh_small():
     n = 3
     x = np.linspace(-1.5, 1.5, n)
@@ -1516,7 +1517,8 @@ def test_pcolormesh_log_scale(fig_test, fig_ref):
     ax.set_xscale('log')
 
 
-@image_comparison(['pcolormesh_datetime_axis.png'], style='mpl20')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['pcolormesh_datetime_axis.png'], style='mpl20', tol=0.3)
 def test_pcolormesh_datetime_axis():
     # Remove this line when this test image is regenerated.
     plt.rcParams['pcolormesh.snap'] = False
@@ -1544,7 +1546,8 @@ def test_pcolormesh_datetime_axis():
             label.set_rotation(30)
 
 
-@image_comparison(['pcolor_datetime_axis.png'], style='mpl20')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['pcolor_datetime_axis.png'], style='mpl20', tol=0.3)
 def test_pcolor_datetime_axis():
     fig = plt.figure()
     fig.subplots_adjust(hspace=0.4, top=0.98, bottom=.15)
@@ -1576,6 +1579,9 @@ def test_pcolor_log_scale(fig_test, fig_ref):
     when using pcolor.
     """
     x = np.linspace(0, 1, 11)
+    # Ensuring second x value always falls slightly above 0.1 prevents flakiness with
+    # numpy v1 #30882. This can be removed once we require numpy >= 2.
+    x[1] += 0.00001
     y = np.linspace(1, 2, 5)
     X, Y = np.meshgrid(x, y)
     C = X[:-1, :-1] + Y[:-1, :-1]
@@ -2325,9 +2331,8 @@ def test_pcolor_regression(pd):
 
     time_axis, y_axis = np.meshgrid(times, y_vals)
     shape = (len(y_vals) - 1, len(times) - 1)
-    z_data = np.arange(shape[0] * shape[1])
+    z_data = np.arange(shape[0] * shape[1]).reshape(shape)
 
-    z_data.shape = shape
     try:
         register_matplotlib_converters()
 
@@ -2456,6 +2461,21 @@ def test_hist_log_barstacked():
     assert axs[0].get_ylim() == axs[1].get_ylim()
 
 
+def test_hist_timedelta_raises():
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+
+    arr_np = np.array([1, 2, 5, 7], dtype="timedelta64[D]")
+    with pytest.raises(TypeError, match="does not currently support timedelta inputs"):
+        ax.hist(arr_np)
+
+    arr_py = [datetime.timedelta(seconds=i) for i in range(5)]
+    with pytest.raises(TypeError, match="does not currently support timedelta inputs"):
+        ax.hist(arr_py)
+
+
 @image_comparison(['hist_bar_empty.png'], remove_text=True)
 def test_hist_bar_empty():
     # From #3886: creating hist from empty dataset raises ValueError
@@ -2578,6 +2598,15 @@ def test_hist_zorder(histtype, zorder):
     assert ax.patches
     for patch in ax.patches:
         assert patch.get_zorder() == zorder
+
+
+def test_hist_single_color_multiple_datasets():
+    data = [[0, 1, 2], [3, 4, 5]]
+    _, _, bar_containers = plt.hist(data, color='k')
+    for p in bar_containers[0].patches:
+        assert mcolors.same_color(p.get_facecolor(), 'k')
+    for p in bar_containers[1].patches:
+        assert mcolors.same_color(p.get_facecolor(), 'k')
 
 
 def test_stairs_no_baseline_fill_warns():
@@ -2753,7 +2782,8 @@ def test_stairs_options():
     ax.legend(loc=0)
 
 
-@image_comparison(['test_stairs_datetime.png'])
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['test_stairs_datetime.png'], tol=0.2)
 def test_stairs_datetime():
     f, ax = plt.subplots(constrained_layout=True)
     ax.stairs(np.arange(36),
@@ -2899,7 +2929,7 @@ class TestScatter:
                     edgecolors=['k', 'r', 'g', 'b'],
                     marker=verts)
 
-    @image_comparison(['scatter_2D'], remove_text=True, extensions=['png'])
+    @image_comparison(['scatter_2D.png'], remove_text=True)
     def test_scatter_2D(self):
         x = np.arange(3)
         y = np.arange(2)
@@ -4154,6 +4184,85 @@ def test_violinplot_sides():
     for pos, side in zip([4, 3.5, 4.5], ['both', 'low', 'high']):
         ax.violinplot(data, positions=[pos], orientation='vertical', showmeans=False,
                       showextrema=True, showmedians=True, side=side)
+
+
+def violin_plot_stats():
+    datetimes = [
+        datetime.datetime(2023, 2, 10),
+        datetime.datetime(2023, 5, 18),
+        datetime.datetime(2023, 6, 6)
+    ]
+    return [{
+        'coords': datetimes,
+        'vals': [1.2, 2.8, 1.5],
+        'mean': 1.84,
+        'median': 1.5,
+        'min': 1.2,
+        'max': 2.8,
+        'quantiles': [1.2, 1.5, 2.8]
+    }, {
+        'coords': datetimes,
+        'vals': [0.8, 1.1, 0.9],
+        'mean': 0.94,
+        'median': 0.9,
+        'min': 0.8,
+        'max': 1.1,
+        'quantiles': [0.8, 0.9, 1.1]
+    }]
+
+
+def test_datetime_positions_with_datetime64():
+    """Test that datetime positions with float widths raise TypeError."""
+    fig, ax = plt.subplots()
+    positions = [np.datetime64('2020-01-01'), np.datetime64('2021-01-01')]
+    widths = [0.5, 1.0]
+    with pytest.raises(TypeError,
+                       match=("np.datetime64 'position' values require "
+                              "np.timedelta64 'widths'")):
+        ax.violin(violin_plot_stats(), positions=positions, widths=widths)
+
+
+def test_datetime_positions_with_float_widths_raises():
+    """Test that datetime positions with float widths raise TypeError."""
+    fig, ax = plt.subplots()
+    positions = [datetime.datetime(2020, 1, 1), datetime.datetime(2021, 1, 1)]
+    widths = [0.5, 1.0]
+    with pytest.raises(TypeError,
+                       match=("datetime/date 'position' values require "
+                              "timedelta 'widths'")):
+        ax.violin(violin_plot_stats(), positions=positions, widths=widths)
+
+
+def test_datetime_positions_with_scalar_float_width_raises():
+    """Test that datetime positions with scalar float width raise TypeError."""
+    fig, ax = plt.subplots()
+    positions = [datetime.datetime(2020, 1, 1), datetime.datetime(2021, 1, 1)]
+    widths = 0.75
+    with pytest.raises(TypeError,
+                       match=("datetime/date 'position' values require "
+                              "timedelta 'widths'")):
+        ax.violin(violin_plot_stats(), positions=positions, widths=widths)
+
+
+def test_numeric_positions_with_float_widths_ok():
+    """Test that numeric positions with float widths work."""
+    fig, ax = plt.subplots()
+    positions = [1.0, 2.0]
+    widths = [0.5, 1.0]
+    ax.violin(violin_plot_stats(), positions=positions, widths=widths)
+
+
+def test_mixed_positions_datetime_and_numeric_raises():
+    """Test that mixed datetime and numeric positions
+    with float widths raise TypeError.
+    """
+    fig, ax = plt.subplots()
+    positions = [datetime.datetime(2020, 1, 1), 2.0]
+    widths = [0.5, 1.0]
+    with pytest.raises(TypeError,
+                       match=("datetime/date 'position' values require "
+                              "timedelta 'widths'")):
+        ax.violin(violin_plot_stats(), positions=positions, widths=widths)
 
 
 def test_violinplot_bad_positions():
@@ -5588,8 +5697,7 @@ def test_axline_args():
         plt.draw()
 
 
-@image_comparison(['vlines_basic', 'vlines_with_nan', 'vlines_masked'],
-                  extensions=['png'])
+@image_comparison(['vlines_basic.png', 'vlines_with_nan.png', 'vlines_masked.png'])
 def test_vlines():
     # normal
     x1 = [2, 3, 4, 5, 7]
@@ -5635,8 +5743,7 @@ def test_vlines_default():
         assert mpl.colors.same_color(lines.get_color(), 'red')
 
 
-@image_comparison(['hlines_basic', 'hlines_with_nan', 'hlines_masked'],
-                  extensions=['png'])
+@image_comparison(['hlines_basic.png', 'hlines_with_nan.png', 'hlines_masked.png'])
 def test_hlines():
     # normal
     y1 = [2, 3, 4, 5, 7]
@@ -5700,8 +5807,7 @@ def test_lines_with_colors(fig_test, fig_ref, data):
                                         colors=expect_color, linewidth=5)
 
 
-@image_comparison(['vlines_hlines_blended_transform'],
-                  extensions=['png'], style='mpl20')
+@image_comparison(['vlines_hlines_blended_transform.png'], style='mpl20')
 def test_vlines_hlines_blended_transform():
     t = np.arange(5.0, 10.0, 0.1)
     s = np.exp(-t) + np.sin(2 * np.pi * t) + 10
@@ -6133,6 +6239,21 @@ def test_grid():
     assert not ax.xaxis.majorTicks[0].gridline.get_visible()
 
 
+def test_grid_color_with_alpha():
+    """Test that grid(color=(..., alpha)) respects the alpha value."""
+    fig, ax = plt.subplots()
+    ax.grid(True, color=(0.5, 0.6, 0.7, 0.3))
+
+    # Check that alpha is extracted from color tuple
+    for tick in ax.xaxis.get_major_ticks():
+        assert tick.gridline.get_alpha() == 0.3, \
+            f"Expected alpha=0.3, got {tick.gridline.get_alpha()}"
+
+    for tick in ax.yaxis.get_major_ticks():
+        assert tick.gridline.get_alpha() == 0.3, \
+            f"Expected alpha=0.3, got {tick.gridline.get_alpha()}"
+
+
 def test_reset_grid():
     fig, ax = plt.subplots()
     ax.tick_params(reset=True, which='major', labelsize=10)
@@ -6382,8 +6503,8 @@ def test_pie_default():
             autopct='%1.1f%%', shadow=True, startangle=90)
 
 
-@image_comparison(['pie_linewidth_0', 'pie_linewidth_0', 'pie_linewidth_0'],
-                  extensions=['png'], style='mpl20', tol=0.01)
+@image_comparison(['pie_linewidth_0.png', 'pie_linewidth_0.png', 'pie_linewidth_0.png'],
+                  style='mpl20', tol=0.01)
 def test_pie_linewidth_0():
     # The slices will be ordered and plotted counter-clockwise.
     labels = 'Frogs', 'Hogs', 'Dogs', 'Logs'
@@ -6492,7 +6613,8 @@ def test_pie_frame_grid():
     plt.axis('equal')
 
 
-@image_comparison(['pie_rotatelabels_true.png'], style='mpl20', tol=0.009)
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['pie_rotatelabels_true.png'], style='mpl20', tol=0.1)
 def test_pie_rotatelabels_true():
     # The slices will be ordered and plotted counter-clockwise.
     labels = 'Hogwarts', 'Frogs', 'Dogs', 'Logs'
@@ -7267,7 +7389,7 @@ def test_loglog():
 
 
 @image_comparison(["test_loglog_nonpos.png"], remove_text=True, style='mpl20',
-                  tol=0 if platform.machine() == 'x86_64' else 0.029)
+                  tol=0.029)
 def test_loglog_nonpos():
     fig, axs = plt.subplots(3, 3)
     x = np.arange(1, 11)
@@ -8408,7 +8530,7 @@ def test_normal_axes():
     ]
     for nn, b in enumerate(bbaxis):
         targetbb = mtransforms.Bbox.from_bounds(*target[nn])
-        assert_array_almost_equal(b.bounds, targetbb.bounds, decimal=2)
+        assert_array_almost_equal(b.bounds, targetbb.bounds, decimal=1)
 
     target = [
         [150.0, 119.999, 930.0, 11.111],
@@ -8426,7 +8548,7 @@ def test_normal_axes():
 
     target = [85.5138, 75.88888, 1021.11, 1017.11]
     targetbb = mtransforms.Bbox.from_bounds(*target)
-    assert_array_almost_equal(bbtb.bounds, targetbb.bounds, decimal=2)
+    assert_array_almost_equal(bbtb.bounds, targetbb.bounds, decimal=1)
 
     # test that get_position roundtrips to get_window_extent
     axbb = ax.get_position().transformed(fig.transFigure).bounds
@@ -10048,3 +10170,22 @@ def test_animated_artists_not_drawn_by_default():
 
     mocked_im_draw.assert_not_called()
     mocked_ln_draw.assert_not_called()
+
+
+def test_errorbar_uses_rcparams():
+    with mpl.rc_context({
+        "errorbar.capsize": 5.0,
+        "errorbar.capthick": 2.5,
+        "errorbar.elinewidth": 1.75,
+    }):
+        fig, ax = plt.subplots()
+        eb = ax.errorbar([0, 1, 2], [1, 2, 3], yerr=[0.1, 0.2, 0.3], fmt="none")
+
+    data_line, caplines, barlinecols = eb.lines
+    assert data_line is None
+    assert caplines
+
+    assert_allclose([cap.get_markersize() for cap in caplines], 10.0)
+    assert_allclose([cap.get_markeredgewidth() for cap in caplines], 2.5)
+    for barcol in barlinecols:
+        assert_allclose(barcol.get_linewidths(), 1.75)

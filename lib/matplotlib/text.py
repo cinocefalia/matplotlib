@@ -11,7 +11,7 @@ import weakref
 import numpy as np
 
 import matplotlib as mpl
-from . import _api, artist, cbook, _docstring
+from . import _api, artist, cbook, _docstring, colors as mcolors
 from .artist import Artist
 from .font_manager import FontProperties
 from .patches import FancyArrowPatch, FancyBboxPatch, Rectangle
@@ -33,7 +33,7 @@ def _get_textbox(text, renderer):
     # TODO : This function may move into the Text class as a method. As a
     # matter of fact, the information from the _get_textbox function
     # should be available during the Text._get_layout() call, which is
-    # called within the _get_textbox. So, it would better to move this
+    # called within the _get_textbox. So, it would be better to move this
     # function as a method with some refactoring of _get_layout method.
 
     projected_xs = []
@@ -864,7 +864,7 @@ class Text(Artist):
                 self._bbox_patch.draw(renderer)
 
             gc = renderer.new_gc()
-            gc.set_foreground(self.get_color())
+            gc.set_foreground(mcolors.to_rgba(self.get_color()), isRGBA=True)
             gc.set_alpha(self.get_alpha())
             gc.set_url(self._url)
             gc.set_antialiased(self._antialiased)
@@ -1059,6 +1059,15 @@ class Text(Artist):
             x, y = self.get_transform().transform((x, y))
             bbox = bbox.translated(x, y)
             return bbox
+
+    def get_tightbbox(self, renderer=None):
+        # Exclude text at data coordinates outside the valid domain of the axes
+        # scales (e.g., negative coordinates with a log scale).
+        if (self.axes
+                and self.get_transform() == self.axes.transData
+                and not self.axes._point_in_data_domain(*self.get_unitless_position())):
+            return Bbox.null()
+        return super().get_tightbbox(renderer)
 
     def set_backgroundcolor(self, color):
         """

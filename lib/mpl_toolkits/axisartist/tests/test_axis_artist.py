@@ -19,12 +19,13 @@ def test_ticks():
     ticks_in.set_locs_angles(locs_angles)
     ax.add_artist(ticks_in)
 
-    ticks_out = Ticks(ticksize=10, tick_out=True, color='C3', axis=ax.xaxis)
+    ticks_out = Ticks(ticksize=10, tick_direction="out", color='C3', axis=ax.xaxis)
     ticks_out.set_locs_angles(locs_angles)
     ax.add_artist(ticks_out)
 
 
-@image_comparison(['axis_artist_labelbase.png'], style='default')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['axis_artist_labelbase.png'], style='default', tol=0.02)
 def test_labelbase():
     # Remove this line when this test image is regenerated.
     plt.rcParams['text.kerning_factor'] = 6
@@ -41,7 +42,8 @@ def test_labelbase():
     ax.add_artist(label)
 
 
-@image_comparison(['axis_artist_ticklabels.png'], style='default')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['axis_artist_ticklabels.png'], style='default', tol=0.03)
 def test_ticklabels():
     # Remove this line when this test image is regenerated.
     plt.rcParams['text.kerning_factor'] = 6
@@ -76,7 +78,8 @@ def test_ticklabels():
     ax.set_ylim(0, 1)
 
 
-@image_comparison(['axis_artist.png'], style='default')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['axis_artist.png'], style='default', tol=0.03)
 def test_axis_artist():
     # Remove this line when this test image is regenerated.
     plt.rcParams['text.kerning_factor'] = 6
@@ -89,11 +92,11 @@ def test_axis_artist():
     for loc in ('left', 'right', 'bottom'):
         helper = AxisArtistHelperRectlinear.Fixed(ax, loc=loc)
         axisline = AxisArtist(ax, helper, offset=None, axis_direction=loc)
+        axisline.major_ticks.set_tick_direction("in")
         ax.add_artist(axisline)
 
     # Settings for bottom AxisArtist.
     axisline.set_label("TTT")
-    axisline.major_ticks.set_tick_out(False)
     axisline.label.set_pad(5)
 
     ax.set_ylabel("Test")

@@ -21,7 +21,7 @@ from matplotlib import cbook, ft2font, pyplot as plt, rc_context, figure as mfig
 from matplotlib.testing import subprocess_run_helper, subprocess_run_for_testing
 
 
-has_fclist = shutil.which('fc-list') is not None
+has_fclist = sys.platform != 'emscripten' and shutil.which('fc-list') is not None
 
 
 def test_font_priority():
@@ -229,6 +229,8 @@ def _model_handler(_):
     plt.close()
 
 
+@pytest.mark.skipif(sys.platform == 'emscripten',
+                    reason='emscripten does not support subprocesses')
 @pytest.mark.skipif(not hasattr(os, "register_at_fork"),
                     reason="Cannot register at_fork handlers")
 def test_fork():
@@ -434,3 +436,17 @@ def test_font_match_warning(caplog):
     findfont(FontProperties(family=["DejaVu Sans"], weight=750))
     logs = [rec.message for rec in caplog.records]
     assert 'findfont: Failed to find font weight 750, now using 700.' in logs
+
+
+def test_mutable_fontproperty_cache_invalidation():
+    fp = FontProperties()
+    assert findfont(fp).endswith("DejaVuSans.ttf")
+    fp.set_weight("bold")
+    assert findfont(fp).endswith("DejaVuSans-Bold.ttf")
+
+
+def test_fontproperty_default_cache_invalidation():
+    mpl.rcParams["font.weight"] = "normal"
+    assert findfont("DejaVu Sans").endswith("DejaVuSans.ttf")
+    mpl.rcParams["font.weight"] = "bold"
+    assert findfont("DejaVu Sans").endswith("DejaVuSans-Bold.ttf")

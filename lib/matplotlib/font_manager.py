@@ -291,6 +291,9 @@ def findSystemFonts(fontpaths=None, fontext='ttf'):
         if sys.platform == 'win32':
             installed_fonts = _get_win32_installed_fonts()
             fontpaths = []
+        elif sys.platform == 'emscripten':
+            installed_fonts = []
+            fontpaths = []
         else:
             installed_fonts = _get_fontconfig_fonts()
             if sys.platform == 'darwin':
@@ -748,7 +751,7 @@ class FontProperties:
 
     def get_weight(self):
         """
-        Set the font weight.  Options are: A numeric value in the
+        Get the font weight.  Options are: A numeric value in the
         range 0-1000 or one of 'light', 'normal', 'regular', 'book',
         'medium', 'roman', 'semibold', 'demibold', 'demi', 'bold',
         'heavy', 'extra bold', 'black'
@@ -1090,9 +1093,12 @@ class FontManager:
         self.ttflist = []
 
         # Delay the warning by 5s.
-        timer = threading.Timer(5, lambda: _log.warning(
-            'Matplotlib is building the font cache; this may take a moment.'))
-        timer.start()
+        try:
+            timer = threading.Timer(5, lambda: _log.warning(
+                'Matplotlib is building the font cache; this may take a moment.'))
+            timer.start()
+        except RuntimeError:
+            timer = None
         try:
             for fontext in ["afm", "ttf"]:
                 for path in [*findSystemFonts(paths, fontext=fontext),
@@ -1105,7 +1111,8 @@ class FontManager:
                         _log.info("Failed to extract font properties from %s: "
                                   "%s", path, exc)
         finally:
-            timer.cancel()
+            if timer:
+                timer.cancel()
 
     def addfont(self, path):
         """
@@ -1344,9 +1351,11 @@ class FontManager:
         # Pass the relevant rcParams (and the font manager, as `self`) to
         # _findfont_cached so to prevent using a stale cache entry after an
         # rcParam was changed.
-        rc_params = tuple(tuple(mpl.rcParams[key]) for key in [
-            "font.serif", "font.sans-serif", "font.cursive", "font.fantasy",
-            "font.monospace"])
+        rc_params = [mpl.rcParams[f"font.{key}"] for key in [
+            "family", "style", "variant", "weight", "stretch", "size",
+            "serif", "sans-serif", "cursive", "fantasy", "monospace"]]
+        rc_params = tuple(tuple(e) if isinstance(e, list) else e
+                          for e in rc_params)  # Make this hashable.
         ret = self._findfont_cached(
             prop, fontext, directory, fallback_to_default, rebuild_if_missing,
             rc_params)

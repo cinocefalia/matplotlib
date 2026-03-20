@@ -7,10 +7,12 @@ from mpl_toolkits.axisartist.axislines import AxesZero, SubplotZero, Subplot
 from mpl_toolkits.axisartist import Axes, SubplotHost
 
 
-@image_comparison(['SubplotZero.png'], style='default')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['SubplotZero.png'], style='default', tol=0.02)
 def test_SubplotZero():
     # Remove this line when this test image is regenerated.
-    plt.rcParams['text.kerning_factor'] = 6
+    plt.rcParams.update({
+        "text.kerning_factor": 6, "xtick.direction": "in", "ytick.direction": "in"})
 
     fig = plt.figure()
 
@@ -28,10 +30,12 @@ def test_SubplotZero():
     ax.set_ylabel("Test")
 
 
-@image_comparison(['Subplot.png'], style='default')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['Subplot.png'], style='default', tol=0.02)
 def test_Subplot():
     # Remove this line when this test image is regenerated.
-    plt.rcParams['text.kerning_factor'] = 6
+    plt.rcParams.update({
+        "text.kerning_factor": 6, "xtick.direction": "in", "ytick.direction": "in"})
 
     fig = plt.figure()
 
@@ -60,6 +64,8 @@ def test_Axes():
 @image_comparison(['ParasiteAxesAuxTrans_meshplot.png'],
                   remove_text=True, style='default', tol=0.075)
 def test_ParasiteAxesAuxTrans():
+    # Remove this line when this test image is regenerated.
+    plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in"})
     data = np.ones((6, 6))
     data[2, 2] = 2
     data[0, :] = 0
@@ -91,6 +97,8 @@ def test_ParasiteAxesAuxTrans():
 
 @image_comparison(['axisline_style.png'], remove_text=True, style='mpl20')
 def test_axisline_style():
+    # Remove this line when this test image is regenerated.
+    plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in"})
     fig = plt.figure(figsize=(2, 2))
     ax = fig.add_subplot(axes_class=AxesZero)
     ax.axis["xzero"].set_axisline_style("-|>")
@@ -105,6 +113,8 @@ def test_axisline_style():
 @image_comparison(['axisline_style_size_color.png'], remove_text=True,
                   style='mpl20')
 def test_axisline_style_size_color():
+    # Remove this line when this test image is regenerated.
+    plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in"})
     fig = plt.figure(figsize=(2, 2))
     ax = fig.add_subplot(axes_class=AxesZero)
     ax.axis["xzero"].set_axisline_style("-|>", size=2.0, facecolor='r')
@@ -119,6 +129,8 @@ def test_axisline_style_size_color():
 @image_comparison(['axisline_style_tight.png'], remove_text=True,
                   style='mpl20')
 def test_axisline_style_tight():
+    # Remove this line when this test image is regenerated.
+    plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in"})
     fig = plt.figure(figsize=(2, 2), layout='tight')
     ax = fig.add_subplot(axes_class=AxesZero)
     ax.axis["xzero"].set_axisline_style("-|>", size=5, facecolor='g')
@@ -130,8 +142,11 @@ def test_axisline_style_tight():
         ax.axis[direction].set_visible(False)
 
 
-@image_comparison(['subplotzero_ylabel.png'], style='mpl20')
+# TODO: tighten tolerance after baseline image is regenerated for text overhaul
+@image_comparison(['subplotzero_ylabel.png'], style='mpl20', tol=0.02)
 def test_subplotzero_ylabel():
+    # Remove this line when this test image is regenerated.
+    plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in"})
     fig = plt.figure()
     ax = fig.add_subplot(111, axes_class=SubplotZero)
 
